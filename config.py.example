@@ -1,0 +1,10 @@
+# Sample config file
+
+options = {
+    'host': 'fqdn which will be invocated',
+    'port': 'port where TLS connection is listening',
+    'method': 'TLSv1. Mandatory',
+    'critical': 5, # Days to expiration, set as critical
+    'warning': 15, # Days to expiration, set as warning
+    'cn': 'canonical name to validate in certificate'
+    }
