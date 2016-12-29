@@ -3,32 +3,25 @@
 '''
     check_ssl.py - Check expiration of SSL certificates for your webs
     Sergio Fernandez Cordero <sergio@fernandezcordero.net>
-    Python3 refactor and improvements to work seen at http://superuser.com/a/620192
 '''
 
 import sys
-from OpenSSL import SSL, crypto
+import ssl
 import socket
-import datetime
+from datetime import datetime
 
 from config import config
-
-# On debian Based systems requires python-openssl
 
 
 def check_config():
     error = 0  # I trust you
+    if ssl.HAS_SNI is not True:  # Show alert if SNI not supported
+        print("WARNING: Your Python installation doens't support SNI.\nThis will cause tests on Virtualhosts fail!")
     if not isinstance(config.get('host'), str):
         print("ERROR: Host is not a string. Check config")
         error = 1
     if not isinstance(config.get('port'), int) and config.get('port') > 65536:
         print("ERROR: Not a valid port")
-        error = 1
-    if not isinstance(config.get('method'), str):
-        print("ERROR: Not a valid method")
-        error = 1
-    if config.get('method') != "TLSv1":
-        print("WARNING: Methods prior to TLSv1 are not secure.")
         error = 1
     if not isinstance(config.get('critical'), int):
         print("ERROR: Not a valid number of days for critical value")
@@ -50,42 +43,56 @@ def main():
     check = check_config()
     if check == 1:
         print("Errors ocurred in config. Check and try again")
+        sys.exit(1)
     else:
         host = config.get('host')
         port = int(config.get('port'))
-        method = config.get('method')
         critical = int(config.get('critical'))
         warning = int(config.get('warning'))
         cn = config.get('cn')
 
     # Initialize context
-    ctx = SSL.Context(SSL.TLSv1_1_METHOD)
+    ctx = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH)
 
-    # Set up client
     try:
-        sock = SSL.Connection(ctx, socket.socket(socket.AF_INET, socket.SOCK_STREAM))
-        sock.connect((host, port))
+        sock = socket.socket()
+        socks = ctx.wrap_socket(sock, server_hostname=host)
+        socks.connect((host, port))
     except ConnectionError as e:
         print(e)
-
-    # Send an EOF
     try:
-        sock.send("\x04")
-        sock.shutdown()
-        peer_cert = sock.get_peer_certificate()
-        sock.close()
-    except SSL.Error as e:
+        cert = socks.getpeercert(binary_form=False)
+    except ssl.SSLError as e:
         print(e)
+
+    # Fun with dates! Check https://docs.python.org/3/library/ssl.html#ssl.cert_time_to_seconds
+    cert_notafter = cert['notAfter']
+    cert_notbefore = cert['notBefore']
 
     exit_status = 0
     exit_message = []
 
-    cur_date = datetime.datetime.utcnow()
-    cert_nbefore = datetime.datetime.strptime(str(peer_cert.get_notBefore()), 'b\'%Y%m%d%H%M%SZ\'')  # This looks weirdo
-    cert_nafter = datetime.datetime.strptime(str(peer_cert.get_notAfter()), 'b\'%Y%m%d%H%M%SZ\'')
-
+    cur_date = datetime.utcnow()
+    cert_nbefore = datetime.strptime(str(cert_notbefore), '%b %d %H:%M:%S %Y %Z')
+    cert_nafter = datetime.strptime(str(cert_notafter), '%b %d %H:%M:%S %Y %Z')
     expire_days = int((cert_nafter - cur_date).days)
 
+    # Get commonName and SubjectAltNames for validation
+    # List of possible names
+    canonicals = []
+    # CommonName
+    subject = cert['subject']
+    for key in subject:
+        for subkey, value in key:
+            if subkey == "commonName":
+                canonicals.append(value)
+    # SubjectAltNames
+    san = cert['subjectAltName']
+    for common, name in san:
+        if name not in canonicals:
+            canonicals.append(name)
+
+    # Let's check expirations!
     if cert_nbefore > cur_date:
         if exit_status < 2:
             exit_status = 2
@@ -107,19 +114,14 @@ def main():
 
     exit_message.append('['+str(expire_days)+'d]')
 
-    for part in peer_cert.get_subject().get_components():
-        if 'b\'CN\'' in str(part[0]):
-            cert_cn_pre = str(part[1])[1:]
-            cert_cn = cert_cn_pre[1:-1]
-
-    if cn != '' and cn.lower() != cert_cn.lower():
-        if exit_status < 2:
-            exit_status = 2
-        exit_message.append(' - CN mismatch ' + cert_cn + ' in Host ' + host)
-    else:
-        exit_message.append(' - CN OK in Host ' + host)
-
-        exit_message.append(' - cn:'+ cert_cn)
+    # Let's check valid names!
+    for cert_cn in canonicals:
+        if cn != '' and cn.lower() != cert_cn.lower():
+            if exit_status < 2:
+                exit_status = 2
+            exit_message.append(' - CN mismatch ' + cert_cn + ' in Host ' + host + "(" + cn + ")")
+        else:
+            exit_message.append(' - CN OK in Host ' + host + "(" + cn + ")")
 
     print(''.join(exit_message))
     sys.exit(exit_status)
