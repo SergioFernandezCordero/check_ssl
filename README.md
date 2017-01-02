@@ -4,7 +4,7 @@
 Also, it can check _commonName_ and _SubjectAltName_ for validation and testing purposes.
 It implements [SNI](https://en.wikipedia.org/wiki/Server_Name_Indication), so multiple virtualhosts are supported.
 
-To run, simply copy config.py.example to config.py and tuen following parameters:
+To run, edit check_ssl.py and tune following parameters in config{}:
 
 * **host**: FWDN which will be invocated
 * **port**: Port where TLS connection is listening (f.e. 443)

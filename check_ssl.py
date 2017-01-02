@@ -10,9 +10,18 @@ import ssl
 import socket
 from datetime import datetime
 
-from config import config
+# Config parameters. Change to your needs. If you wanna use default, delete the corresponding line
+
+config = {
+    'host': 'my.host.name', # Mandatory
+    'port': 8443, # Optional, default 443
+    'critical': 5, # Optional, default 5
+    'warning': 15, # Optional, default 15
+    'cn': 'my.canonical.name' # Optional, defaults to defined in 'host'
+}
 
 
+# Check configuration parameters
 def check_config():
     if ssl.HAS_SNI is not True:  # Show alert if SNI not supported
         print("WARNING: Your Python installation doens't support SNI.\nThis will cause tests on Virtualhosts fail!")
