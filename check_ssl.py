@@ -105,7 +105,7 @@ if cert_nbefore > cur_date:
 elif expire_days < 0:
     if exit_status < 2:
         exit_status = 2
-    exit_message.append('Expire critical (expired)')
+    exit_message.append('Expire critical ###EXPIRED###')
 elif critical > expire_days:
     if exit_status < 2:
         exit_status = 2
@@ -117,7 +117,7 @@ elif warning > expire_days:
 else:
     exit_message.append('Expire OK')
 
-exit_message.append('['+str(expire_days)+'d]')
+exit_message.append(' '+str(expire_days)+'d')
 
 # Let's check valid names!
 for cert_cn in canonicals:
