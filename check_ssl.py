@@ -8,44 +8,49 @@
 import sys
 import ssl
 import socket
+import argparse
 from datetime import datetime
 
 # Config parameters. Change to your needs. If you wanna use default, delete the corresponding line
 
-config = {
-    'host': 'my.host.name', # Mandatory
-    'port': 8443, # Optional, default 443
-    'critical': 5, # Optional, default 5
-    'warning': 15, # Optional, default 15
-    'cn': 'my.canonical.name' # Optional, defaults to defined in 'host'
-}
-
+# Parse arguments about receiver
+parser = argparse.ArgumentParser()
+parser.add_argument("-s", "--server", help="FQDN hostname to connect", type=str)
+parser.add_argument("-p", "--port", help="Destination port. Defaults to 443", type=int)
+parser.add_argument("-c", "--crit", help="Critical threshold. Defaults to 5", type=int)
+parser.add_argument("-w", "--warn", help="Warning threshold. Defautls to 15", type=int)
+parser.add_argument("-cn", "--canonical", help="Canonical name to check. Defaults to --host", type=str)
+try:
+    args = parser.parse_args()
+except TypeError as e:
+    print(e)
+    sys.exit(1)
 
 # Check configuration parameters
 def check_config():
     if ssl.HAS_SNI is not True:  # Show alert if SNI not supported
         print("WARNING: Your Python installation doens't support SNI.\nThis will cause tests on Virtualhosts fail!")
-    if not config.get('host') or not isinstance(config.get('host'), str):
+    if not args.server or not isinstance(args.server, str):
         print("ERROR: Host not set or is not a string. Check config")
         sys.exit(1)
     else:
-        host = config.get('host')
-    if not config.get('port') or not isinstance(config.get('port'), int) and config.get('port') > 65536:
+        host = args.server
+    if not args.port or args.port > 65536:
         port = 443
     else:
-        port = int(config.get('port'))
-    if not config.get('critical') or not isinstance(config.get('critical'), int):
+        port = args.port
+    if not args.crit or not isinstance(args.crit, int):
         critical = 5
     else:
-        critical = int(config.get('critical'))
-    if not config.get('warning') or not isinstance(config.get('warning'), int):
+        critical = args.crit
+    if not args.warn or not isinstance(args.warn, int):
         warning = 15
     else:
-        warning = int(config.get('warning'))
-    if not config.get('cn') or not isinstance(config.get('cn'), str):
-        cn = config.get('host')
+        warning = args.warn
+    if not args.canonical or not isinstance(args.canonical, str):
+        cn = host
     else:
-        cn = config.get('cn')
+        cn = args.canonical
     return host, port, warning, critical, cn
 
 # Check if configuration introduced is valid or use defaults and extract values
